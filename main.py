@@ -32,13 +32,17 @@ try:
 
     setup()
 
+    num = 0
     while True:
 
-        output([True]*8)
-        time.sleep(1)
+        binary_string = format(num, '08b')
+        register = [int(bit) == 1 for bit in binary_string]
+        output(register)
 
-        output([False]*8)
-        time.sleep(1)
+        num += 1
+        num %= 256
+        time.sleep(.1)
+
 
 except KeyboardInterrupt:
     pass
