@@ -1,55 +1,47 @@
-import librosa
-import numpy as np
-import matplotlib.pyplot as plt
-# from music21 import stream, note
+import RPi.GPIO as GPIO
+import time
 
-# Load the audio file
-file_path = "./happy-birthday-266285.mp3"
-y, sr = librosa.load(file_path)
+def setup():
 
-# Compute the Short-Time Fourier Transform (STFT)
-n_fft = 2048  # FFT window size
-hop_length = 512  # Number of samples between successive frames
-stft_matrix = librosa.stft(y, n_fft=n_fft, hop_length=hop_length)
+    GPIO.setmode(GPIO.BCM)
 
-# Get the magnitude of the STFT (absolute value of complex numbers)
-magnitude = np.abs(stft_matrix)  # Shape: (n_fft/2+1, time_frames)
-frequencies = librosa.fft_frequencies(sr=sr, n_fft=n_fft)  # Frequency bins
+    GPIO.setup(2, GPIO.OUT)
+    GPIO.setup(3, GPIO.OUT)
+    GPIO.setup(4, GPIO.OUT)
+    GPIO.setup(17, GPIO.OUT)
+    GPIO.setup(27, GPIO.OUT)
+    GPIO.setup(22, GPIO.OUT)
+    GPIO.setup(10, GPIO.OUT)
+    GPIO.setup(9, GPIO.OUT)
 
-# Define Frequency Bands (Example)
-bands = {
-    "Sub-Bass": (20, 60),
-    "Bass": (60, 150),
-    "Low-Midrange": (150, 400),
-    "Midrange": (400, 1000),
-    "Upper-Midrange": (1000, 2500),
-    "Presence": (2500, 5000),
-    "Brilliance Low": (5000, 10000),
-    "Brilliance High": (10000, 20000),
-}
+def output(values):
 
-# Find indices for each frequency band
-band_indices = {
-    band: np.where((frequencies >= low) & (frequencies <= high))[0]
-    for band, (low, high) in bands.items()
-}
+    GPIO.output(2, GPIO.HIGH if values[0] else GPIO.LOW)
+    GPIO.output(3, GPIO.HIGH if values[1] else GPIO.LOW)
+    GPIO.output(4, GPIO.HIGH if values[2] else GPIO.LOW)
+    GPIO.output(17, GPIO.HIGH if values[3] else GPIO.LOW)
+    GPIO.output(27, GPIO.HIGH if values[4] else GPIO.LOW)
+    GPIO.output(22, GPIO.HIGH if values[5] else GPIO.LOW)
+    GPIO.output(10, GPIO.HIGH if values[6] else GPIO.LOW)
+    GPIO.output(9, GPIO.HIGH if values[7] else GPIO.LOW)
 
-# Sum the energy in each band across time
-band_energies_over_time = {}
-for band, indices in band_indices.items():
-    # Sum magnitudes for the current band across the indices
-    energy = magnitude[indices, :].sum(axis=0)
-    band_energies_over_time[band] = energy
+def teardown():
+    GPIO.cleanup()
 
-# Plot the energy over time for each band
-# plt.figure(figsize=(10, 6))
-# for band, energy in band_energies_over_time.items():
-#     plt.plot(energy, label=band)
-# plt.title("Frequency Band Energies Over Time")
-# plt.xlabel("Time Frames")
-# plt.ylabel("Energy")
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
+try:
 
-print(band_energies_over_time)
+    setup()
+
+    while True:
+
+        output([True]*8)
+        time.sleep(1)
+
+        output([False]*8)
+        time.sleep(1)
+
+except KeyboardInterrupt:
+    pass
+
+finally:
+    teardown()
