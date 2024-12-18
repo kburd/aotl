@@ -1,38 +1,104 @@
-import wave
-import time
-import sys
+import wave, time, sys, pyaudio
+import numpy as np
+import RPi.GPIO as GPIO
 
-import pyaudio
+# ============== DEFAULT VALUES ==============
 
+chunk_size = 1024
+sample_rate = 44100 
+gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9] 
 
-if len(sys.argv) < 2:
-    print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
-    sys.exit(-1)
+bands = {
+    "Sub-Bass": (20, 60),
+    "Bass": (60, 150),
+    "Low-Midrange": (150, 400),
+    "Midrange": (400, 1000),
+    "Upper-Midrange": (1000, 2500),
+    "Presence": (2500, 5000),
+    "Brilliance Low": (5000, 10000),
+    "Brilliance High": (10000, 20000),
+}
 
-with wave.open(sys.argv[1], 'rb') as wf:
-    # Define callback for playback (1)
-    def callback(in_data, frame_count, time_info, status):
-        data = wf.readframes(frame_count)
-        # If len(data) is less than requested frame_count, PyAudio automatically
-        # assumes the stream is finished, and the stream stops.
-        return (data, pyaudio.paContinue)
+# ============== UTILITY FUNCTIONS ==============
 
-    # Instantiate PyAudio and initialize PortAudio system resources (2)
-    p = pyaudio.PyAudio()
+def calculate_band_sums(magnitude, positive_freqs, threshold):
+    binary_number = 0
+    
+    for i, (band_name, (low_freq, high_freq)) in enumerate(bands.items()):
+        # Find indices corresponding to the frequency band
+        band_indices = np.where((positive_freqs >= low_freq) & (positive_freqs <= high_freq))[0]
+        
+        # Sum the magnitudes in this frequency band
+        band_magnitude_sum = np.sum(magnitude[band_indices])
+        
+        if band_magnitude_sum > threshold:
+            binary_number |= (1 << i)  # Set the i-th bit to 1
+    
+    return binary_number
 
-    # Open stream using callback (3)
-    stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                    channels=wf.getnchannels(),
-                    rate=wf.getframerate(),
-                    output=True,
-                    stream_callback=callback)
+def writeToRegister(value):
 
-    # Wait for stream to finish (4)
-    while stream.is_active():
-        time.sleep(0.1)
+    for i, pin in enumerate(gpio_pins):
+        bit = (value >> i) & 1
+        GPIO.output(pin, bit)
 
-    # Close the stream (5)
-    stream.close()
+def setupGPIO():
 
-    # Release PortAudio system resources (6)
-    p.terminate()
+    GPIO.setmode(GPIO.BCM)
+
+    for pin in gpio_pins:
+        GPIO.setup(pin, GPIO.OUT)
+
+def shutdownGPIO():
+    GPIO.cleanup()
+
+# ============== MAIN ==============
+
+if __name__ is "__main__":
+
+    if len(sys.argv) < 2:
+        print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
+        sys.exit(-1)
+
+    try:
+
+        setupGPIO()
+        
+        with wave.open(sys.argv[1], 'rb') as wf:
+
+            # Define callback for playback (1)
+            def callback(in_data, frame_count, time_info, status):
+                data = wf.readframes(frame_count)
+                audio_signal = np.frombuffer(data, dtype=np.int16)
+                fft_result = np.fft.fft(audio_signal)                    
+                magnitude = np.abs(fft_result[:chunk_size // 2])
+                binary_number = calculate_band_sums(magnitude, positive_freqs, 10_000_000)
+                writeToRegister(binary_number)
+                return (data, pyaudio.paContinue)
+
+            # Instantiate PyAudio and initialize PortAudio system resources (2)
+            p = pyaudio.PyAudio()
+
+            # Open stream using callback (3)
+            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                            channels=wf.getnchannels(),
+                            rate=wf.getframerate(),
+                            output=True,
+                            stream_callback=callback)
+
+            # Wait for stream to finish (4)
+            while stream.is_active():
+                time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+
+        # Close the stream (5)
+        stream.close()
+
+        # Release PortAudio system resources (6)
+        p.terminate()
+
+        shutdownGPIO()
