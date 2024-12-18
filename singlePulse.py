@@ -69,7 +69,7 @@ if __name__ == "__main__":
             writeToRegister(1)
             time.sleep(1)
 
-            writeToRegister(1)
+            writeToRegister(0)
             time.sleep(1)
 
     except KeyboardInterrupt:
