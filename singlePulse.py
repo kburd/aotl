@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
         setupGPIO()
         
-        with True:
+        while True:
 
             writeToRegister(1)
             time.sleep(1)
@@ -76,5 +76,5 @@ if __name__ == "__main__":
         pass
 
     finally:
-        
+
         shutdownGPIO()
