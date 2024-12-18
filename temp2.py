@@ -72,11 +72,11 @@ if __name__ == "__main__":
 
             # Define callback for playback (1)
             def callback(in_data, frame_count, time_info, status):
-                data = wf.readframes(frame_count)
+                data = wf.readframes(chunk_size)
                 audio_signal = np.frombuffer(data, dtype=np.int16)
                 fft_result = np.fft.fft(audio_signal)                    
-                magnitude = np.abs(fft_result[:frame_count // 2])
-                binary_number = calculate_band_sums(magnitude, frame_count, 10_000_000)
+                magnitude = np.abs(fft_result[:chunk_size // 2])
+                binary_number = calculate_band_sums(magnitude, chunk_size, 10_000_000)
                 writeToRegister(binary_number)
                 return (data, pyaudio.paContinue)
 
@@ -87,6 +87,7 @@ if __name__ == "__main__":
             stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                             channels=wf.getnchannels(),
                             rate=wf.getframerate(),
+                            frames_per_buffer=chunk_size,
                             output=True,
                             stream_callback=callback)
 
