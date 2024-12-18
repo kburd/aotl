@@ -8,9 +8,6 @@ chunk_size = 1024
 sample_rate = 44100 
 gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9] 
 
-freqs = np.fft.fftfreq(chunk_size, 1 / sample_rate)
-positive_freqs = freqs[:chunk_size // 2]
-
 bands = {
     "Sub-Bass": (20, 60),
     "Bass": (60, 150),
@@ -24,7 +21,11 @@ bands = {
 
 # ============== UTILITY FUNCTIONS ==============
 
-def calculate_band_sums(magnitude, positive_freqs, threshold):
+def calculate_band_sums(magnitude, frame_count, threshold):
+
+    freqs = np.fft.fftfreq(frame_count, 1 / sample_rate)
+    positive_freqs = freqs[:frame_count // 2]    
+
     binary_number = 0
     
     for i, (band_name, (low_freq, high_freq)) in enumerate(bands.items()):
@@ -57,7 +58,7 @@ def shutdownGPIO():
 
 # ============== MAIN ==============
 
-if __name__ is "__main__":
+if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
@@ -74,8 +75,8 @@ if __name__ is "__main__":
                 data = wf.readframes(frame_count)
                 audio_signal = np.frombuffer(data, dtype=np.int16)
                 fft_result = np.fft.fft(audio_signal)                    
-                magnitude = np.abs(fft_result[:chunk_size // 2])
-                binary_number = calculate_band_sums(magnitude, positive_freqs, 10_000_000)
+                magnitude = np.abs(fft_result[:frame_count // 2])
+                binary_number = calculate_band_sums(magnitude, frame_count, 10_000_000)
                 writeToRegister(binary_number)
                 return (data, pyaudio.paContinue)
 
