@@ -58,16 +58,18 @@ positive_freqs = freqs[:chunk_size // 2]  # Only positive frequencies
 def callback(in_data, frame_count, time_info, status):
 
     data = wf.readframes(frame_count)
-    audio_signal = np.frombuffer(data, dtype=np.int16)
 
-    # Apply FFT to the chunk_size of audio data
-    fft_result = np.fft.fft(audio_signal)
-    
-    # Get the magnitude of the frequencies (only positive frequencies)
-    magnitude = np.abs(fft_result[:chunk_size // 2])
+    if len(data) != 0:
+        audio_signal = np.frombuffer(data, dtype=np.int16)
 
-    binary_number = calculate_band_sums(magnitude, positive_freqs, 10_000_000)
-    writeToRegister(binary_number)
+        # Apply FFT to the chunk_size of audio data
+        fft_result = np.fft.fft(audio_signal)
+        
+        # Get the magnitude of the frequencies (only positive frequencies)
+        magnitude = np.abs(fft_result[:chunk_size // 2])
+
+        binary_number = calculate_band_sums(magnitude, positive_freqs, 10_000_000)
+        writeToRegister(binary_number)
 
     return (data, pyaudio.paContinue)
 
