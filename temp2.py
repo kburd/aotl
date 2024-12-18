@@ -8,6 +8,9 @@ chunk_size = 1024
 sample_rate = 44100 
 gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9] 
 
+freqs = np.fft.fftfreq(chunk_size, 1 / sample_rate)
+positive_freqs = freqs[:chunk_size // 2]
+
 bands = {
     "Sub-Bass": (20, 60),
     "Bass": (60, 150),
