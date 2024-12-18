@@ -1,19 +1,31 @@
-import wave, sys, pyaudio
+import wave, time, sys, pyaudio
 import numpy as np
 import RPi.GPIO as GPIO
 
+# ============== DEFAULT VALUES ==============
 
-def setupGPIO():
+chunk_size = 1024
+sample_rate = 44100 
+gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9] 
 
-    GPIO.setmode(GPIO.BCM)
+bands = {
+    "Sub-Bass": (20, 60),
+    "Bass": (60, 150),
+    "Low-Midrange": (150, 400),
+    "Midrange": (400, 1000),
+    "Upper-Midrange": (1000, 2500),
+    "Presence": (2500, 5000),
+    "Brilliance Low": (5000, 10000),
+    "Brilliance High": (10000, 20000),
+}
 
-    for pin in gpio_pins:
-        GPIO.setup(pin, GPIO.OUT)
+# ============== UTILITY FUNCTIONS ==============
 
-def shutdownGPIO():
-    GPIO.cleanup()
+def calculate_band_sums(magnitude, frame_count, threshold):
 
-def calculate_band_sums(magnitude, positive_freqs, threshold):
+    freqs = np.fft.fftfreq(frame_count, 1 / sample_rate)
+    positive_freqs = freqs[:frame_count // 2]    
+
     binary_number = 0
     
     for i, (band_name, (low_freq, high_freq)) in enumerate(bands.items()):
@@ -34,70 +46,64 @@ def writeToRegister(value):
         bit = (value >> i) & 1
         GPIO.output(pin, bit)
 
-# Define frequency bands
-bands = {
-    "Sub-Bass": (20, 60),
-    "Bass": (60, 150),
-    "Low-Midrange": (150, 400),
-    "Midrange": (400, 1000),
-    "Upper-Midrange": (1000, 2500),
-    "Presence": (2500, 5000),
-    "Brilliance Low": (5000, 10000),
-    "Brilliance High": (10000, 20000),
-}
+def setupGPIO():
 
+    GPIO.setmode(GPIO.BCM)
 
-chunk_size = 1024
-sample_rate = 44100  # Sample rate of the audio
+    for pin in gpio_pins:
+        GPIO.setup(pin, GPIO.OUT)
 
-gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9] 
+def shutdownGPIO():
+    GPIO.cleanup()
 
-freqs = np.fft.fftfreq(chunk_size, 1 / sample_rate)
-positive_freqs = freqs[:chunk_size // 2]  # Only positive frequencies
+# ============== MAIN ==============
 
-if len(sys.argv) < 2:
-    print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
-    sys.exit(-1)
+if __name__ == "__main__":
 
-try: 
-    
-    setupGPIO()
+    if len(sys.argv) < 2:
+        print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
+        sys.exit(-1)
 
-    with wave.open(sys.argv[1], 'rb') as wf:
-        # Instantiate PyAudio and initialize PortAudio system resources (1)
-        p = pyaudio.PyAudio()
+    try:
 
-        # Open stream (2)
-        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                        channels=wf.getnchannels(),
-                        rate=wf.getframerate(),
-                        output=True)
-
-        # Play samples from the wave file (3)
-        while len(data := wf.readframes(chunk_size)):  # Requires Python 3.8+ for :=
-
-            audio_signal = np.frombuffer(data, dtype=np.int16)
+        setupGPIO()
         
-            # Apply FFT to the chunk_size of audio data
-            fft_result = np.fft.fft(audio_signal)
-            
-            # Get the magnitude of the frequencies (only positive frequencies)
-            magnitude = np.abs(fft_result[:chunk_size // 2])
+        with wave.open(sys.argv[1], 'rb') as wf:
 
-            binary_number = calculate_band_sums(magnitude, positive_freqs, 1_000_000)
-            writeToRegister(binary_number)
+            # Define callback for playback (1)
+            def callback(in_data, frame_count, time_info, status):
+                data = wf.readframes(chunk_size)
+                audio_signal = np.frombuffer(data, dtype=np.int16)
+                fft_result = np.fft.fft(audio_signal)                    
+                magnitude = np.abs(fft_result[:chunk_size // 2])
+                binary_number = calculate_band_sums(magnitude, chunk_size, 10_000_000)
+                writeToRegister(binary_number)
+                return (data, pyaudio.paContinue)
 
-            stream.write(data)
+            # Instantiate PyAudio and initialize PortAudio system resources (2)
+            p = pyaudio.PyAudio()
 
-except KeyboardInterrupt:
-    pass
+            # Open stream using callback (3)
+            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                            channels=wf.getnchannels(),
+                            rate=wf.getframerate(),
+                            frames_per_buffer=chunk_size,
+                            output=True,
+                            stream_callback=callback)
 
-finally:
+            # Wait for stream to finish (4)
+            while stream.is_active():
+                time.sleep(0.1)
 
-    # Close stream (4)
-    stream.close()
+    except KeyboardInterrupt:
+        pass
 
-    # Release PortAudio system resources (5)
-    p.terminate()
+    finally:
 
-    shutdownGPIO()
+        # Close the stream (5)
+        stream.close()
+
+        # Release PortAudio system resources (6)
+        p.terminate()
+
+        shutdownGPIO()

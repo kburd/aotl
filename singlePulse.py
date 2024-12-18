@@ -60,50 +60,21 @@ def shutdownGPIO():
 
 if __name__ == "__main__":
 
-    if len(sys.argv) < 2:
-        print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
-        sys.exit(-1)
-
     try:
 
         setupGPIO()
         
-        with wave.open(sys.argv[1], 'rb') as wf:
+        with True:
 
-            # Define callback for playback (1)
-            def callback(in_data, frame_count, time_info, status):
-                data = wf.readframes(chunk_size)
-                audio_signal = np.frombuffer(data, dtype=np.int16)
-                fft_result = np.fft.fft(audio_signal)                    
-                magnitude = np.abs(fft_result[:chunk_size // 2])
-                binary_number = calculate_band_sums(magnitude, chunk_size, 10_000_000)
-                writeToRegister(binary_number)
-                return (data, pyaudio.paContinue)
+            writeToRegister(1)
+            time.sleep(1)
 
-            # Instantiate PyAudio and initialize PortAudio system resources (2)
-            p = pyaudio.PyAudio()
-
-            # Open stream using callback (3)
-            stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                            channels=wf.getnchannels(),
-                            rate=wf.getframerate(),
-                            frames_per_buffer=chunk_size,
-                            output=True,
-                            stream_callback=callback)
-
-            # Wait for stream to finish (4)
-            while stream.is_active():
-                time.sleep(0.1)
+            writeToRegister(1)
+            time.sleep(1)
 
     except KeyboardInterrupt:
         pass
 
     finally:
-
-        # Close the stream (5)
-        stream.close()
-
-        # Release PortAudio system resources (6)
-        p.terminate()
-
+        
         shutdownGPIO()
