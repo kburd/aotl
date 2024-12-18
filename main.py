@@ -1,108 +1,103 @@
-import RPi.GPIO as GPIO
-import time
-import librosa
+import wave, sys, pyaudio
 import numpy as np
+import RPi.GPIO as GPIO
 
-def setup():
+
+def setupGPIO():
 
     GPIO.setmode(GPIO.BCM)
 
-    GPIO.setup(2, GPIO.OUT)
-    GPIO.setup(3, GPIO.OUT)
-    GPIO.setup(4, GPIO.OUT)
-    GPIO.setup(17, GPIO.OUT)
-    GPIO.setup(27, GPIO.OUT)
-    GPIO.setup(22, GPIO.OUT)
-    GPIO.setup(10, GPIO.OUT)
-    GPIO.setup(9, GPIO.OUT)
+    for pin in gpio_pins:
+        GPIO.setup(pin, GPIO.OUT)
 
-def output(values):
-
-    GPIO.output(2, GPIO.HIGH if values[0] else GPIO.LOW)
-    GPIO.output(3, GPIO.HIGH if values[1] else GPIO.LOW)
-    GPIO.output(4, GPIO.HIGH if values[2] else GPIO.LOW)
-    GPIO.output(17, GPIO.HIGH if values[3] else GPIO.LOW)
-    GPIO.output(27, GPIO.HIGH if values[4] else GPIO.LOW)
-    GPIO.output(22, GPIO.HIGH if values[5] else GPIO.LOW)
-    GPIO.output(10, GPIO.HIGH if values[6] else GPIO.LOW)
-    GPIO.output(9, GPIO.HIGH if values[7] else GPIO.LOW)
-
-def teardown():
+def shutdownGPIO():
     GPIO.cleanup()
 
-def loadAudio():
-    file_path = "./happy-birthday-266285.mp3"
-    y, sr = librosa.load(file_path)
-    return y, sr
+def calculate_band_sums(magnitude, positive_freqs, threshold):
+    binary_number = 0
+    
+    for i, (band_name, (low_freq, high_freq)) in enumerate(bands.items()):
+        # Find indices corresponding to the frequency band
+        band_indices = np.where((positive_freqs >= low_freq) & (positive_freqs <= high_freq))[0]
+        
+        # Sum the magnitudes in this frequency band
+        band_magnitude_sum = np.sum(magnitude[band_indices])
+        
+        if band_magnitude_sum > threshold:
+            binary_number |= (1 << i)  # Set the i-th bit to 1
+    
+    return binary_number
 
-def dsp(y, sr):
+def writeToRegister(value):
 
-    # Compute the Short-Time Fourier Transform (STFT)
-    n_fft = 2048  # FFT window size
-    hop_length = 512  # Number of samples between successive frames
-    stft_matrix = librosa.stft(y, n_fft=n_fft, hop_length=hop_length)
+    for i, pin in enumerate(gpio_pins):
+        bit = (value >> i) & 1
+        GPIO.output(pin, bit)
 
-    # Get the magnitude of the STFT (absolute value of complex numbers)
-    magnitude = np.abs(stft_matrix)  # Shape: (n_fft/2+1, time_frames)
-    frequencies = librosa.fft_frequencies(sr=sr, n_fft=n_fft)  # Frequency bins
-
-    # Define Frequency Bands (Example)
-    bands = {
-        "Sub-Bass": (20, 60),
-        "Bass": (60, 150),
-        "Low-Midrange": (150, 400),
-        "Midrange": (400, 1000),
-        "Upper-Midrange": (1000, 2500),
-        "Presence": (2500, 5000),
-        "Brilliance Low": (5000, 10000),
-        "Brilliance High": (10000, 20000),
-    }
-
-    # Find indices for each frequency band
-    band_indices = {
-        band: np.where((frequencies >= low) & (frequencies <= high))[0]
-        for band, (low, high) in bands.items()
-    }
-
-    # Sum the energy in each band across time
-    band_signals_over_time = {}
-    for band, indices in band_indices.items():
-        # Sum magnitudes for the current band across the indices
-        energy = magnitude[indices, :].sum(axis=0)
-        signals = [level >= 1 for level in energy]
-        band_signals_over_time[band] = signals
-
-    return band_signals_over_time
-
-def writeBandSignalsToRegistery(band_signals_over_time):
-
-    bandKeys = list(band_signals_over_time.keys())
-
-    for i in range(len(band_signals_over_time[bandKeys[0]])):
-
-        register = [False] * 8
-        for j, band in enumerate(bandKeys):
-            register[j] = band_signals_over_time[band][i]
-
-        output(register)
-        time.sleep(.1)
+# Define frequency bands
+bands = {
+    "Sub-Bass": (20, 60),
+    "Bass": (60, 150),
+    "Low-Midrange": (150, 400),
+    "Midrange": (400, 1000),
+    "Upper-Midrange": (1000, 2500),
+    "Presence": (2500, 5000),
+    "Brilliance Low": (5000, 10000),
+    "Brilliance High": (10000, 20000),
+}
 
 
+chunk_size = 1024
+sample_rate = 44100  # Sample rate of the audio
 
+gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9] 
 
+freqs = np.fft.fftfreq(chunk_size, 1 / sample_rate)
+positive_freqs = freqs[:chunk_size // 2]  # Only positive frequencies
 
+if len(sys.argv) < 2:
+    print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
+    sys.exit(-1)
 
-try:
+try: 
+    
+    setupGPIO()
 
-    setup()
-    y, sr = loadAudio()
-    band_signals_over_time = dsp(y, sr)
-    writeBandSignalsToRegistery(band_signals_over_time)
+    with wave.open(sys.argv[1], 'rb') as wf:
+        # Instantiate PyAudio and initialize PortAudio system resources (1)
+        p = pyaudio.PyAudio()
 
+        # Open stream (2)
+        stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
+                        channels=wf.getnchannels(),
+                        rate=wf.getframerate(),
+                        output=True)
+
+        # Play samples from the wave file (3)
+        while len(data := wf.readframes(chunk_size)):  # Requires Python 3.8+ for :=
+
+            audio_signal = np.frombuffer(data, dtype=np.int16)
+        
+            # Apply FFT to the chunk_size of audio data
+            fft_result = np.fft.fft(audio_signal)
+            
+            # Get the magnitude of the frequencies (only positive frequencies)
+            magnitude = np.abs(fft_result[:chunk_size // 2])
+
+            binary_number = calculate_band_sums(magnitude, positive_freqs, 1_000_000)
+            writeToRegister(binary_number)
+
+            stream.write(data)
 
 except KeyboardInterrupt:
     pass
 
 finally:
-    teardown()
-    pass
+
+    # Close stream (4)
+    stream.close()
+
+    # Release PortAudio system resources (5)
+    p.terminate()
+
+    shutdownGPIO()

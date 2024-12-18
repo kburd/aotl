@@ -55,6 +55,22 @@ gpio_pins = [2, 3, 4, 17, 27, 22, 10, 9]
 freqs = np.fft.fftfreq(chunk_size, 1 / sample_rate)
 positive_freqs = freqs[:chunk_size // 2]  # Only positive frequencies
 
+def callback(in_data, frame_count, time_info, status):
+
+    data = wf.readframes(frame_count)
+    audio_signal = np.frombuffer(data, dtype=np.int16)
+
+    # Apply FFT to the chunk_size of audio data
+    fft_result = np.fft.fft(audio_signal)
+    
+    # Get the magnitude of the frequencies (only positive frequencies)
+    magnitude = np.abs(fft_result[:chunk_size // 2])
+
+    binary_number = calculate_band_sums(magnitude, positive_freqs, 10_000_000)
+    writeToRegister(binary_number)
+
+    return (data, pyaudio.paContinue)
+
 if len(sys.argv) < 2:
     print(f'Plays a wave file. Usage: {sys.argv[0]} filename.wav')
     sys.exit(-1)
@@ -71,33 +87,23 @@ try:
         stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
                         channels=wf.getnchannels(),
                         rate=wf.getframerate(),
-                        output=True)
+                        output=True,
+                        stream_callback=callback)
 
-        # Play samples from the wave file (3)
-        while len(data := wf.readframes(chunk_size)):  # Requires Python 3.8+ for :=
+        # Wait for stream to finish (4)
+        while stream.is_active():
+            time.sleep(0.1)
 
-            audio_signal = np.frombuffer(data, dtype=np.int16)
-        
-            # Apply FFT to the chunk_size of audio data
-            fft_result = np.fft.fft(audio_signal)
-            
-            # Get the magnitude of the frequencies (only positive frequencies)
-            magnitude = np.abs(fft_result[:chunk_size // 2])
-
-            binary_number = calculate_band_sums(magnitude, positive_freqs, 1_000_000)
-            writeToRegister(binary_number)
-
-            stream.write(data)
 
 except KeyboardInterrupt:
     pass
 
 finally:
 
-    # Close stream (4)
+    # Close the stream (5)
     stream.close()
 
-    # Release PortAudio system resources (5)
+    # Release PortAudio system resources (6)
     p.terminate()
 
     shutdownGPIO()
