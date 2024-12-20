@@ -1,33 +1,15 @@
-import pyaudio
+import alsaaudio
 import numpy as np
 
-# Set up parameters for audio sampling
-FORMAT = pyaudio.paInt16  # Format for audio
-CHANNELS = 1  # Mono audio
-RATE = 44100  # Sample rate (44.1kHz)
-CHUNK = 1024  # Number of frames per buffer
-
-# Initialize PyAudio
-p = pyaudio.PyAudio()
-
-# Open audio stream
-stream = p.open(format=FORMAT, channels=CHANNELS,
-                rate=RATE, input=True,
-                frames_per_buffer=CHUNK)
-
-print("Recording...")
+# Open ALSA PCM device for capture
+inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL)
+inp.setchannels(2)  # Set to stereo (1 for mono, 2 for stereo)
+inp.setrate(44100)  # Set sample rate (same as Raspotify)
+inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)  # 16-bit sample size
+inp.setperiodsize(1024)  # Number of frames per buffer
 
 while True:
-    # Read data from audio stream
-    data = np.frombuffer(stream.read(CHUNK), dtype=np.int16)
-
-    # Process the audio signal
-    rms = np.sqrt(np.mean(data**2))  # Calculate Root Mean Square (RMS) of the signal
-    
-    # Set a threshold for RMS to trigger GPIO pin (adjust based on your needs)
-    if rms > 500:
-        print("Audio above threshold, activating GPIO pin")
-        # Activate GPIO pin based on audio volume
-        # You can trigger GPIO actions here
-
-    # You can also process frequencies, peaks, etc., for more advanced control
+    l, data = inp.read()
+    if l:
+        audio_data = np.frombuffer(data, dtype=np.int16)
+        print(np.max(np.abs(audio_data)))  # Print maximum amplitude
