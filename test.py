@@ -42,12 +42,13 @@ input_stream = p.open(
     stream_callback=callback
 )
 
+# Wait for stream to finish (4)
+while stream.is_active():
+    time.sleep(0.1)
 
-# # Wait for stream to finish (4)
-# while stream.is_active():
-#     time.sleep(0.1)
-
-# # Close the stream
-# stream.stop_stream()
-# stream.close()
-# p.terminate()
+# Close the streams and terminate PyAudio
+input_stream.stop_stream()
+input_stream.close()
+output_stream.stop_stream()
+output_stream.close()
+p.terminate()
