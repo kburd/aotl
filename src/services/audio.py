@@ -20,8 +20,8 @@ class AudioService:
         self.stream = self.p.open(
             format=pyaudio.paInt16,
             channels=1,
-            rate=config.sample_rate,
-            frames_per_buffer=config.chunk_size,
+            rate=config.sample_rate(),
+            frames_per_buffer=config.chunk_size(),
             input=True,
             input_device_index=3,
             output=True,
@@ -29,7 +29,9 @@ class AudioService:
             stream_callback=self.process
         )
 
+        self.registerService.startup()
         self.stream.start_stream()
+
 
     def process(self, data, frame_count, time_info, status):
 

@@ -15,7 +15,7 @@ class Config:
         if hasattr(self, "data"):
             return  # Ensure init is only run once
 
-        self.file_path = "config.json"
+        self.file_path = ".src/data/config.json"
         self.data = {}
         self.load()
 
