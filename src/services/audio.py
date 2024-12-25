@@ -1,26 +1,28 @@
 
-from utils import config.Config
+from utils.config import Config
+from services.register import RegisterService
 
 class AudioService:
+
+    config = Config()
 
     def __init__(self):
         self.registerService = RegisterService()
         self.p = pyaudio.PyAudio()
         self.stream = None
-        self.config = Config()
 
     def start(self):
 
         # Find the loopback device
-        for i in range(p.get_device_count()):
-            device_info = p.get_device_info_by_index(i)
+        for i in range(self.p.get_device_count()):
+            device_info = self.p.get_device_info_by_index(i)
             print(device_info)
         
-        self.stream = p.open(
+        self.stream = self.p.open(
             format=pyaudio.paInt16,
             channels=1,
-            rate=self.config.sample_rate,
-            frames_per_buffer=self.config.chunk_size,
+            rate=config.sample_rate,
+            frames_per_buffer=config.chunk_size,
             input=True,
             input_device_index=3,
             output=True,
@@ -30,23 +32,24 @@ class AudioService:
 
         self.stream.start_stream()
 
+    @staticmethod
     def process(self, data, frame_count, time_info, status):
 
         # Process Audio
         audio_signal = np.frombuffer(data, dtype=np.int16)
         fft_result = np.fft.fft(audio_signal)                    
-        magnitude = np.abs(fft_result[:self.config.chunk_size // 2])
+        magnitude = np.abs(fft_result[:config.chunk_size // 2])
 
         # Calculate bands
-        freqs = np.fft.fftfreq(frame_count, 1 / self.config.sample_rate)
+        freqs = np.fft.fftfreq(frame_count, 1 / config.sample_rate)
         positive_freqs = freqs[:frame_count // 2] 
 
         binary_number = 0
         
-        for i, (band_name, (low_freq, high_freq)) in enumerate(self.config.bands.items()):
+        for i, (band_name, (low_freq, high_freq)) in enumerate(config.bands.items()):
             band_indices = np.where((positive_freqs >= low_freq) & (positive_freqs <= high_freq))[0]            
             band_magnitude_sum = np.sum(magnitude[band_indices])
-            if band_magnitude_sum > self.config.threshold:
+            if band_magnitude_sum > config.threshold:
                 binary_number |= (1 << i)
 
         # Output to Register
