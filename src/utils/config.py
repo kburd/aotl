@@ -51,3 +51,5 @@ class Config:
 
     def bands(self):
         return self.data.get("bands")
+
+config = Config()

@@ -1,10 +1,9 @@
 
-from utils.config import Config
+import pyaudio
+from utils.config import config
 from services.register import RegisterService
 
 class AudioService:
-
-    config = Config()
 
     def __init__(self):
         self.registerService = RegisterService()
