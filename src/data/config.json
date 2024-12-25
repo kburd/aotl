@@ -10,6 +10,6 @@
         "Upper-Midrange": [1000, 2500],
         "Presence": [2500, 5000],
         "Brilliance Low": [5000, 10000],
-        "Brilliance High": [10000, 20000],
-    },
+        "Brilliance High": [10000, 20000]
+    }
 }
